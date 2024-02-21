@@ -41,9 +41,9 @@ f'''{mime_type_to_emoji(file.mime_type)} File <b>{file.name}</b>
 MIME type: <b>{file.mime_type}</b></i>
 ''', user_id, msg.message_id, reply_markup=kb)
 
-	def explore_dir(user_id: int, folder_id: int|None, mode: Literal['browse','delete','rename'] = 'browse'):
+	def explore_dir(user_id: int, folder_id: int | None, mode: Literal['browse', 'select'] = 'browse'):
 		folder = db.folder.get_folder(folder_id)
-		logging.info(f'User {user_id} acessed folder {folder}')
+		logging.info(f'User {user_id} accessed folder {folder}')
 		if (folder is None) or (folder.user_id != user_id):
 			tg.text(user_id, '❌ This folder does not exist or you do not have necessary permissions.')
 			return
@@ -58,36 +58,32 @@ MIME type: <b>{file.mime_type}</b></i>
 		buttons = [[
 			tt.InlineKeyboardButton('♻️ Refresh', callback_data=f'deleteme;explorer:{folder_id}:{mode}')
 		], [
-			tt.InlineKeyboardButton('🗑️ Delete', callback_data=f'deleteme;explorer:{folder_id}:delete'),
-			tt.InlineKeyboardButton('📦 Move', callback_data=f'maint'),
-			tt.InlineKeyboardButton('✏️ Rename', callback_data=f'deleteme;explorer:{folder_id}:rename')
+			tt.InlineKeyboardButton('🗑️ Delete', callback_data=f'deleteme;explorer:{folder_id}:select'),
+			tt.InlineKeyboardButton('📦 Move',   callback_data=f'deleteme;explorer:{folder_id}:select'),
+			tt.InlineKeyboardButton('✏️ Rename', callback_data=f'deleteme;explorer:{folder_id}:select')
 		]]
 		if (mode == 'browse') and (folder.parent_folder_id is not None):
 			parent = db.folder.get_folder(folder.parent_folder_id)
-			buttons.append(tt.InlineKeyboardButton(f"📁 .. ({parent.name})", callback_data=f"deleteme;explorer:{parent.folder_id}:{mode}"))	
+			buttons.append(tt.InlineKeyboardButton(f"📁 .. ({parent.name})", callback_data=f"deleteme;explorer:{parent.folder_id}:{mode}"))
 		if mode != 'browse':
-			buttons.append(tt.InlineKeyboardButton(f"✖️ Cancel {({'delete':'deleting','rename':'renaming'})[mode]}", callback_data=f"deleteme;explorer:{folder_id}"))	
+			buttons.append(tt.InlineKeyboardButton(f"✖️ Cancel Select", callback_data=f"deleteme;explorer:{folder_id}"))
 		t = f'📂 Current directory: <b>{current_path}</b>'
-		if mode == 'delete':
-			t = f'\n<b>Select file/directory to be deleted:</b>'
-		if mode == 'rename':
-			t = f'\n<b>Select directory to rename (renaming files isn\'t supported yet):</b>'
+		if mode == 'select':
+			t = f'\n<b>Select directory or file:</b>'
 		if children:
 			buttons.append(tt.InlineKeyboardButton('---------', callback_data='none'))
 			if mode == 'browse':
 				folder_buttons = [tt.InlineKeyboardButton(f"📁 {x.name}", callback_data=f"deleteme;explorer:{x.folder_id}") for x in children if isinstance(x, FolderData)]
 				file_buttons = [tt.InlineKeyboardButton(f"{mime_type_to_emoji(x.mime_type)} {x.name}", callback_data=f"file:{x.file_id}") for x in children if isinstance(x, FileData)]
-			elif mode == 'delete':
-				folder_buttons = [tt.InlineKeyboardButton(f"[CLICK TO DELETE] 📁 {x.name}", callback_data=f"delete_folder:{x.folder_id}") for x in children if isinstance(x, FolderData)]
-				file_buttons = [tt.InlineKeyboardButton(f"[CLICK TO DELETE] {mime_type_to_emoji(x.mime_type)} {x.name}", callback_data=f"delete_file:{x.file_id}") for x in children if isinstance(x, FileData)]
-			elif mode == 'rename':
-				folder_buttons = [tt.InlineKeyboardButton(f"[CLICK TO RENAME] 📁 {x.name}", callback_data=f"rename_folder:{x.folder_id};deleteme;explorer:{folder_id}:browse") for x in children if isinstance(x, FolderData)]
-				file_buttons = []
-			all_buttons = [x if isinstance(x, list) else [x,] for x in (buttons + folder_buttons + file_buttons)]
+			elif mode == 'select':
+				folder_buttons = [tt.InlineKeyboardButton(f"[CLICK TO SELECT] 📁 {x.name}", callback_data=f"select:{x.folder_id}") for x in children if isinstance(x, FolderData)]
+				file_buttons = [tt.InlineKeyboardButton(f"[CLICK TO SELECT] {mime_type_to_emoji(x.mime_type)} {x.name}", callback_data=f"select:{x.file_id}") for x in children if isinstance(x, FileData)]
+			all_buttons = [x if isinstance(x, list) else [x, ] for x in (buttons + folder_buttons + file_buttons)]
 			tg.list(user_id, t, None, all_buttons)
 		else:
-			tg.text(user_id, t+'\n\n<i>(empty)</i>', keyboard=tt.InlineKeyboardMarkup([x if isinstance(x, list) else [x,] for x in buttons]))
+			tg.text(user_id, t + '\n\n<i>(empty)</i>', keyboard=tt.InlineKeyboardMarkup([x if isinstance(x, list) else [x, ] for x in buttons]))
 		db.user.set_last_opened_folder(user_id, folder_id)
+
 
 	def confirm_delete_folder(confirmed: bool, user_id: int, folder_id: int ):
 		kb = tt.InlineKeyboardMarkup([[
@@ -214,6 +210,8 @@ While in a directory:
 					tg.text(user_id, "🚧 Please try again later, this option is now under maintenance 🚧")
 				elif cmd == 'explorer':
 					explore_dir(user_id, int(args[0]), args[1] if len(args) > 1 else 'browse')
+				elif cmd == 'select':
+					pass
 				elif cmd == 'file':
 					preview_file(user_id, int(args[0]))
 				elif cmd == 'delete_folder':
